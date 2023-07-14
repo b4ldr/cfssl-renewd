@@ -28,7 +28,7 @@ func (p *Perms) gid() int {
 	return os.Getegid()
 }
 func (p *Perms) uid() int {
-	if p.Group != "" {
+	if p.Owner != "" {
 		owner, err := user.Lookup(p.Owner)
 		if err != nil {
 			log.Fatal(err)
