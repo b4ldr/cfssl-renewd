@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/cloudflare/cfssl/cli"
+	"github.com/cloudflare/cfssl/cli/sign"
 	cfssl_config "github.com/cloudflare/cfssl/config"
 	"github.com/cloudflare/cfssl/signer"
-	"github.com/cloudflare/cfssl/cli/sign"
 	"github.com/ilyakaznacheev/cleanenv"
 
 	"github.com/b4ldr/cfssl-renewd/config"
@@ -17,7 +18,6 @@ var (
 	configFile       = flag.String("config", "/etc/cfssl/renewd.yaml", "path to the config file")
 	signerConfigFile = flag.String("signer-config", "/etc/cfssl/client-cfssl.conf", "path to the cfssl client config file")
 	cfg              config.Config
-	cfssl_cfg        cfssl_config.Config
 	cfssl_signer     signer.Signer
 )
 
@@ -27,7 +27,9 @@ func main() {
 		fmt.Println(err)
 		os.Exit(2)
 	}
-	cfssl_cfg, err := cfssl_config.LoadFile(*signerConfigFile)
+	var cfssl_cfg cli.Config
+	var err error
+	cfssl_cfg.CFG, err = cfssl_config.LoadFile(*signerConfigFile)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(2)
@@ -43,8 +45,12 @@ func main() {
 		if err := request.Init_files(); err != nil {
 			fmt.Println(err)
 			os.Exit(2)
-		if !(request.Certfile_exist && request.Key_exist()) {
-		  request.Gencert(cfssl_signer)
+		}
+		if !(request.Certfile_exist() && request.Key_exist()) {
+			if err = request.Gencert(cfssl_signer); err != nil {
+				fmt.Println(err)
+				os.Exit(2)
+			}
 		}
 	}
 }

@@ -1,9 +1,12 @@
 package request
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
+	"github.com/cloudflare/cfssl/cli/genkey"
+	"github.com/cloudflare/cfssl/csr"
 	"github.com/cloudflare/cfssl/signer"
 )
 
@@ -47,6 +50,7 @@ func (r *Request) Set_defaults() {
 	if r.Renew_seconds == 0 {
 		r.Renew_seconds = 84600
 	}
+	r.CSR.Key.Set_defaults()
 }
 
 func fileExists(filename string) bool {
@@ -64,6 +68,55 @@ func (r *Request) Key_exist() bool {
 	return fileExists(r.certfile)
 }
 
+func (r *Request) Gencert(s signer.Signer) error {
+	var key, csrBytes []byte
+	req := csr.CertificateRequest{
+		KeyRequest: csr.NewKeyRequest(),
+	}
+	csrBytes, err := r.CSR.json()
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(csrBytes, &req)
+	if err != nil {
+		return err
+	}
+	req.CN = r.CSR.CN
+	req.Hosts = r.CSR.Hosts
+	g := &csr.Generator{Validator: genkey.Validator}
+	csrBytes, key, err = g.ProcessRequest(&req)
+	if err != nil {
+		key = nil
+		return err
+	}
+	signReq := signer.SignRequest{
+		Request: string(csrBytes),
+		Hosts:   r.CSR.Hosts,
+		Profile: r.Profile,
+		Label:   r.Signer,
+	}
+	cert, err := s.Sign(signReq)
+	if err != nil {
+		return err
+	}
+	println("write file {}", r.certfile)
+	err = os.WriteFile(r.certfile, cert, r.Perms.mode())
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(r.keyfile, key, r.Perms.mode())
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(r.csrfile, csrBytes, r.Perms.mode())
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/*
 func (r *Request) Sign(s signer.Signer) error {
 	csr, err := r.CSR.json()
 	if err != nil {
@@ -83,3 +136,4 @@ func (r *Request) Sign(s signer.Signer) error {
 	// write cert file
 	return nil
 }
+*/
